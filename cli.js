@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 var Cabal = require('cabal-node')
-var cabalSwarm = require('cabal-node/swarm.js')
+var swarm = require('cabal-node/swarm.js')
 var minimist = require('minimist')
 var frontend = require('./neat-screen.js')
 
@@ -34,8 +34,8 @@ if (!args.db) {
   process.exit(1)
 }
 
-var cabal = Cabal(args.db, args.key, {username: args.nick || 'conspirator'})
-cabal.db.on('ready', function () {
+var cabal = Cabal(args.db, args.key)
+cabal.db.ready(function () {
   frontend(cabal)
-  cabalSwarm(cabal)
+  swarm(cabal)
 })

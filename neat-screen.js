@@ -6,8 +6,6 @@ var chalk = require('chalk')
 var blit = require('txt-blit')
 var util = require('./util')
 
-// TODO:
-
 const HEADER_ROWS = 6
 
 function NeatScreen (cabal) {
@@ -120,13 +118,6 @@ function NeatScreen (cabal) {
     // load initial state of the channel
     self.loadChannel('default')
   })
-  self.cabal.on('join', (username) => {
-    self.writeLine(`* ${username} joined`)
-  })
-
-  self.cabal.on('leave', (username) => {
-    self.writeLine(`* ${username} left`)
-  })
 
   function view (state) {
     var screen = []
@@ -167,7 +158,7 @@ function renderPrompt (state) {
 function renderTitlebar (state, width) {
   return [
     chalk.bgBlue(util.centerText(chalk.white.bold('CABAL'), width)),
-    util.rightAlignText(chalk.white(`dat://${state.cabal.db.key.toString('hex')}`), width)
+    util.rightAlignText(chalk.white(`dat://${state.cabal.key}`), width)
   ]
 }
 
@@ -193,6 +184,8 @@ function renderHorizontalLine (chr, width, chlk) {
 }
 
 function renderNicks (state, width, height) {
+  return []
+
   var users = Object.keys(state.cabal.users)
     .map(function (username) {
       return username.slice(0, width)
@@ -249,20 +242,13 @@ NeatScreen.prototype.loadChannel = function (channel) {
   // if we monitor a new channel, destroy the old watcher first
   if (self.watcher) self.watcher.destroy()
 
-  function onMessages (err, messages) {
-    if (err) return
-    messages.map((arr) => {
-      arr.forEach((m) => {
-        self.state.messages.push(self.formatMessage(m))
-      })
-    })
-    self.neat.render()
-  }
-  self.cabal.getMessages(channel, MAX_MESSAGES, onMessages)
-
-  self.watcher = self.cabal.watch(channel, () => {
-    self.cabal.getMessages(channel, 1, onMessages)
+  var rs = self.cabal.readMessages(channel, {limit: MAX_MESSAGES})
+  rs.on('data', function (msg) {
+    self.state.messages.push(self.formatMessage(msg))
   })
+  rs.on('end', function () { self.neat.render() })
+
+  // TODO: watch for new messages?
 }
 
 NeatScreen.prototype.render = function () {
@@ -273,18 +259,19 @@ NeatScreen.prototype.formatMessage = function (msg) {
   var self = this
   var hilight = false
   var user = self.cabal.username
-  if (msg.value) { msg = msg.value }
-  if (!msg.type) { msg.type = 'chat/text' }
-  if (msg.content && msg.author && msg.time) {
-    if (msg.content.indexOf(user) > -1 && msg.author !== user) { hilight = true }
+  if (!msg.value.type) { msg.type = 'chat/text' }
+  if (msg.value.content && msg.value.timestamp) {
+    // if (msg.content.indexOf(user) > -1 && msg.author !== user) { hilight = true }
+    
+    var author = msg.key.slice(0, 8)
 
-    var timestamp = `${chalk.gray(formatTime(msg.time))}`
-    var authorText = `${chalk.gray('<')}${chalk.cyan(msg.author)}${chalk.gray('>')}`
-    var content = msg.content
-    var emote = (msg.type === 'chat/emote')
+    var timestamp = `${chalk.gray(formatTime(msg.value.timestamp))}`
+    var authorText = `${chalk.gray('<')}${chalk.cyan(author)}${chalk.gray('>')}`
+    var content = msg.value.content.text
+    var emote = (msg.value.type === 'chat/emote')
 
     if (emote) {
-      authorText = `${chalk.white(msg.author)}`
+      authorText = `${chalk.white(author)}`
       content = `${chalk.gray(msg.content)}`
     }
 

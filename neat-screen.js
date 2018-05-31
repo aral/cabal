@@ -117,6 +117,13 @@ function NeatScreen (cabal) {
     self.bus = bus
     // load initial state of the channel
     self.loadChannel('default')
+
+    self.cabal.db.ready(function () {
+      self.cabal.db.api.users.getAll(function (err, users) {
+        state.users = users
+        self.bus.emit('render')
+      })
+    })
   })
 
   function view (state) {
@@ -151,7 +158,7 @@ function NeatScreen (cabal) {
 
 function renderPrompt (state) {
   return [
-    `[${chalk.cyan(state.cabal.username)}:${state.channel}] ${state.neat.input.line()}`
+    `[${chalk.cyan(state.username)}:${state.channel}] ${state.neat.input.line()}`
   ]
 }
 
@@ -184,13 +191,12 @@ function renderHorizontalLine (chr, width, chlk) {
 }
 
 function renderNicks (state, width, height) {
-  return []
-
-  var users = Object.keys(state.cabal.users)
-    .map(function (username) {
-      return username.slice(0, width)
+  return (Object.keys(state.users || {}) || [])
+    .map(function (key) {
+      var user = state.users[key]
+      if (user.name) return user.name.slice(0, width)
+      else return key
     })
-  return users
 }
 
 function renderMessages (state, width, height) {
@@ -244,7 +250,7 @@ NeatScreen.prototype.loadChannel = function (channel) {
 
   var rs = self.cabal.readMessages(channel, {limit: MAX_MESSAGES})
   rs.on('data', function (msg) {
-    self.state.messages.push(self.formatMessage(msg))
+    self.state.messages.push(self.formatMessage(self.state, msg))
   })
   rs.on('end', function () { self.neat.render() })
 
@@ -255,7 +261,7 @@ NeatScreen.prototype.render = function () {
   this.bus.emit('render')
 }
 
-NeatScreen.prototype.formatMessage = function (msg) {
+NeatScreen.prototype.formatMessage = function (state, msg) {
   var self = this
   var hilight = false
   var user = self.cabal.username
@@ -263,7 +269,9 @@ NeatScreen.prototype.formatMessage = function (msg) {
   if (msg.value.content && msg.value.timestamp) {
     // if (msg.content.indexOf(user) > -1 && msg.author !== user) { hilight = true }
     
-    var author = msg.key.slice(0, 8)
+    var author
+    if (state.users && state.users[msg.key]) author = state.users[msg.key].name
+    else author = msg.key.slice(0, 8)
 
     var timestamp = `${chalk.gray(formatTime(msg.value.timestamp))}`
     var authorText = `${chalk.gray('<')}${chalk.cyan(author)}${chalk.gray('>')}`
